@@ -27,7 +27,7 @@ const Dashboard: React.FC = () => {
             <StatusCard 
               title="Deployment Status"
               status="success"
-              message="Congratulations Manual Build and Deployment of React Application is Successfull using AWS Code Build and Deploy"
+              message="Congratulations Manual Build and Deployment of React Application is Successfull using AWS Code Pipeline"
               timestamp={new Date().toLocaleString()}
             />
           </FadeIn>
