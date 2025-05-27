@@ -1,0 +1,17 @@
+##use this buildspec file if you have saved your dockerhub username and dockerhub password in environment variables
+version: 0.2 
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Docker Hub...
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+  build:
+    commands:
+      - npm install
+      - npm run build
+      - docker build -t ci-cd-deployment .
+      - docker tag ci-cd-deployment sagarkakkalasworld/ci-cd-deployment
+  post_build:
+    commands:
+      - docker push sagarkakkalasworld/ci-cd-deployment
