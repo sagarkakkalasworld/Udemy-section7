@@ -1,0 +1,28 @@
+###use this file if you have used AWS secret manager and change variables wherever required accordingly
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 16
+    commands:
+      - echo Updating apt and installing jq...
+      - apt-get update && apt-get install -y jq
+  pre_build:
+    commands:
+      - echo Fetching Docker credentials from AWS Secrets Manager...
+      - |
+        SECRET=$(aws secretsmanager get-secret-value --secret-id dockerHubCredentials --query SecretString --output text)
+        export DOCKER_USERNAME=$(echo $SECRET | jq -r '.DOCKER_USERNAME')
+        export DOCKER_PASSWORD=$(echo $SECRET | jq -r '.DOCKER_PASSWORD')
+      - echo Logging in to Docker Hub...
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+  build:
+    commands:
+      - npm install
+      - npm run build
+      - docker build -t ci-cd-deployment .
+      - docker tag ci-cd-deployment sagarkakkalasworld/ci-cd-deployment
+  post_build:
+    commands:
+      - docker push sagarkakkalasworld/ci-cd-deployment
