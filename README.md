@@ -1,93 +1,288 @@
-# Udemy-section7
+# 🚀 CI/CD with AWS: CodeBuild, CodeDeploy, and CodePipeline
 
+This project demonstrates a complete CI/CD pipeline using three powerful AWS services:
 
+- **CodeBuild** – Builds a Docker image and pushes it to Docker Hub.
+- **CodeDeploy** – Restarts application pods on a server.
+- **CodePipeline** – Connects build and deploy stages and acts as a webhook for automation.
 
-## Getting started
+---
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## 🔧 AWS CodeBuild
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+### 🛠 Step 1: Create a CodeBuild Project
 
-## Add your files
+1. Go to **CodeBuild** in the AWS Console.
+2. Click **Create Project**.
+3. Choose a project name.
+4. In the **Source** section, select **GitHub** (or your code repo).
+   - For public repositories, choose **Public repository**.
+5. In **Environment**:
+   - Managed image: **Ubuntu**
+   - Runtime: **Standard**
+   - Role: Let AWS create a new service role
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+---
 
+### 🔐 Authentication with Docker Hub
+
+To push Docker images, you need:
+- `DOCKER_USERNAME`
+- `DOCKER_PASSWORD`
+
+We explore two ways to store these securely.
+
+---
+
+### 📦 Case 1: Environment Variables
+
+1. Save credentials in **Environment variables**.
+2. Use the following `buildspec.yml`:
+
+```yaml
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Docker Hub...
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+
+  build:
+    commands:
+      - npm install
+      - npm run build
+      - docker build -t ci-cd-deployment .
+      - docker tag ci-cd-deployment sagarkakkalasworld/ci-cd-deployment
+
+  post_build:
+    commands:
+      - docker push sagarkakkalasworld/ci-cd-deployment
+````
+
+3. Start the build and monitor logs.
+4. ✅ Image will appear in Docker Hub.
+
+---
+
+### 🔒 Case 2: AWS Secrets Manager (More Secure)
+
+1. **Create an IAM role** with access to Secrets Manager.
+
+   * Attach CodeBuild's default policies.
+2. **Store DockerHub credentials** in Secrets Manager:
+
+   * Secret name: `DockerHubCredentials`
+   * Format:
+
+```json
+{
+  "DOCKER_USERNAME": "your_dockerhub_username",
+  "DOCKER_PASSWORD": "your_dockerhub_password"
+}
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/sagarkakkala-group/udemy-section7.git
-git branch -M main
-git push -uf origin main
+
+3. Use this `buildspec.yml`:
+
+```yaml
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 16
+    commands:
+      - apt-get update && apt-get install -y jq
+
+  pre_build:
+    commands:
+      - echo Fetching Docker credentials from AWS Secrets Manager...
+      - |
+        SECRET=$(aws secretsmanager get-secret-value --secret-id DockerHubCredentials --query SecretString --output text)
+        export DOCKER_USERNAME=$(echo $SECRET | jq -r '.DOCKER_USERNAME')
+        export DOCKER_PASSWORD=$(echo $SECRET | jq -r '.DOCKER_PASSWORD')
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+
+  build:
+    commands:
+      - npm install
+      - npm run build
+      - docker build -t ci-cd-deployment .
+      - docker tag ci-cd-deployment sagarkakkalasworld/ci-cd-deployment
+
+  post_build:
+    commands:
+      - docker push sagarkakkalasworld/ci-cd-deployment
 ```
 
-## Integrate with your tools
+4. Start the build and confirm success.
 
-- [ ] [Set up project integrations](https://gitlab.com/sagarkakkala-group/udemy-section7/-/settings/integrations)
+---
 
-## Collaborate with your team
+## 🚀 AWS CodeDeploy
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+> 🔔 **Pre-requisite**: Ensure both the **deploy server** and **agent server** are **running**.
 
-## Test and Deploy
+### 🖥️ Step 1: Setup EC2 Instance
 
-Use the built-in continuous integration in GitLab.
+1. Launch an EC2 Ubuntu instance.
+2. SSH into the instance.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### 🔑 Step 2: Generate SSH Keys
 
-***
+```bash
+ssh-keygen
+```
 
-# Editing this README
+* Save in: `/home/ubuntu/.ssh/id_rsa`
+* Copy `id_rsa.pub` to the target server’s `authorized_keys`.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### 🔁 Step 3: Test SSH
 
-## Suggestions for a good README
+```bash
+ssh ubuntu@<DEMO_SERVER_IP>
+exit
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+---
 
-## Name
-Choose a self-explaining name for your project.
+### 🔧 Step 4: CodeDeploy Agent Setup
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+1. Create two IAM roles:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+   * For **CodeDeploy** (access EC2/S3)
+   * For **EC2** (access CodeDeploy)
+2. Attach EC2 role to instance.
+3. SSH into EC2 and run:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```bash
+sudo apt update
+sudo apt install ruby-full wget
+cd /home/ubuntu
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+wget https://aws-codedeploy-us-west-1.s3.us-west-1.amazonaws.com/latest/install
+chmod +x ./install
+sudo ./install auto
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# Check status
+systemctl status codedeploy-agent
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# If not running
+sudo systemctl start codedeploy-agent
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+> ⚠️ After attaching the role:
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+```bash
+sudo service codedeploy-agent restart
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+📌 [AWS Agent Install Docs](https://docs.aws.amazon.com/codedeploy/latest/userguide/codedeploy-agent-operations-install-ubuntu.html)
+📌 [AWS Regional S3 Buckets](https://docs.aws.amazon.com/codedeploy/latest/userguide/resource-kit.html#resource-kit-bucket-names)
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+---
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### 🏗 Step 5: Create CodeDeploy Application
 
-## License
-For open source projects, say how it is licensed.
+1. Go to **CodeDeploy**.
+2. Click **Create Application**.
+3. Enter name.
+4. Select **EC2/On-premises** as compute platform.
+5. Click **Create Application**.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+### 🔧 Step 6: Create Deployment Group
+
+1. Click **Create Deployment Group**.
+2. Enter name.
+3. Use **CodeDeployRole** ARN.
+4. Choose:
+
+   * **EC2 instances**
+   * EC2 instance **tags**
+5. Disable "Enable load balancing".
+6. Click **Create Deployment Group**.
+
+---
+
+### 🚀 Step 7: Create a Deployment
+
+1. Click **Create Deployment**.
+2. Select **My application is in GitHub**.
+3. Authenticate via **GitHub token**.
+4. Provide:
+
+   * **Repo**: `sagarkakkalasworld/Udemy-section7`
+   * **Commit ID**: `f3e7838c9be9733c7f27f006d2b5a3168430a308`
+
+---
+
+### 📄 Required Files in GitHub Repo
+
+#### ✅ `appspec.yml`
+
+```yaml
+version: 0.0
+os: linux
+hooks:
+  AfterInstall:
+    - location: restart.sh
+      timeout: 60
+      runas: ubuntu
+```
+
+#### ✅ `restart.sh`
+
+```bash
+#!/bin/bash
+ssh ubuntu@172.31.30.63 "microk8s kubectl rollout restart deployment react-deployment -n react-microk8s"
+```
+
+> ⚠️ Replace the IP with your internal server IP.
+
+---
+
+### 📊 Monitor Deployment
+
+* Click **View Events**.
+* Monitor stages like `DownloadBundle`, `AfterInstall`, etc.
+
+---
+
+## 🔄 AWS CodePipeline
+
+Now that we have:
+
+* ✅ CodeBuild (build and push)
+* ✅ CodeDeploy (restart app pods)
+
+Let's connect them.
+
+### ⚙️ Steps:
+
+1. Go to **AWS CodePipeline**.
+2. Click **Create Pipeline**.
+3. Choose a pipeline name.
+4. Add stages:
+
+   * **Source**: GitHub
+   * **Build**: Select CodeBuild project
+   * **Deploy**: Select CodeDeploy App & Deployment Group
+
+---
+
+## ✅ Final Workflow
+
+1. Push code to GitHub
+2. CodePipeline triggers build
+3. CodeBuild builds and pushes Docker image
+4. CodeDeploy restarts pods with updated image
+
+---
+
+## 📬 Connect with Me
+
+I post content related to contrafactums, fun vlogs, travel stories, DevOps, and more.
+
+🔗 [Sagar Kakkala One Stop – Linktree](https://linktr.ee/sagar_kakkalas_world)
+
+🖊 Feedback and suggestions are welcome!
